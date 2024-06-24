@@ -48,6 +48,22 @@ api.subscribe(portfolioMessage, (data) => {
     console.log(companies);
 });
 
+// search
+var searchMessage = createMessage("neonSearch", {
+    data: {
+        q: "amd",
+        page: 1,
+        pageSize: 3,
+        filter: [
+            { key: "type", value: "stock" },
+            { key: "jurisdiction", value: "DE" }
+        ]
+    }
+});
+
+api.subscribe(searchMessage, (data) => {
+    console.log("serach data", data);
+});
 ```
 
 ## Methods
