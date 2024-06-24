@@ -39,8 +39,66 @@ export type MessageTypeMap = {
     userPortfolioChartModifiedDietz: Message<"userPortfolioChartModifiedDietz"> & {
         range: string;
     };
+    fincrimeBanner: Message<"fincrimeBanner">;
+    tradingPerkConditionStatus: Message<"tradingPerkConditionStatus">;
+    watchlists: Message<"watchlists">;
+    timelineActions: Message<"timelineActions">;
+    collection: Message<"collection"> & {
+        view: string;
+    };
+    neonSearchSuggestedTags: Message<"neonSearchSuggestedTags"> & {
+        data: {
+            q: string;
+        };
+    };
+    availableSize: Message<"availableSize"> & {
+        parameters: {
+            exchangeId: string;
+            instrumentId: string;
+        };
+    };
+    aggregateHistoryLight: Message<"aggregateHistoryLight"> & {
+        range: string;
+        id: string;
+    };
+    priceForOrder: Message<"priceForOrder"> & {
+        parameters: {
+            exchangeId: string;
+            instrumentId: string;
+            type: string;
+        };
+    };
+    stockDetails: Message<"stockDetails"> & {
+        id: string;
+        jurisdiction: string;
+    };
+    performance: Message<"performance"> & {
+        id: string;
+    };
+    yieldToMaturity: Message<"yieldToMaturity"> & {
+        id: string;
+    };
+    neonNews: Message<"neonNews"> & {
+        isin: string;
+    };
+    instrumentSuitability: Message<"instrumentSuitability"> & {
+        instrumentId: string;
+    };
+    simpleCreateOrder: Message<"simpleCreateOrder"> & {
+        parameters: {
+            instrumentId: string;
+            exchangeId: string;
+            mode: string;
+            type: string;
+            size: number;
+            expiry: { type: string };
+            sellFractions: boolean;
+            lastClientPrice: number;
+        };
+        warningsShown: string[];
+        clientProcessId: string;
+    };
 };
-
 
 export function createMessage<T extends keyof MessageTypeMap>(
     type: T,
