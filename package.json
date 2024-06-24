@@ -1,7 +1,13 @@
 {
   "name": "trapi",
-  "module": "index.ts",
+  "version": "0.0.1",
+  "module": "src/index.ts",
+  "types": "types/index.d.ts",
   "type": "module",
+  "scripts": {
+    "build": "bun run build.mjs",
+    "prepublishOnly": "bun run build"
+  },
   "devDependencies": {
     "@types/bun": "latest"
   },
@@ -9,6 +15,7 @@
     "typescript": "^5.0.0"
   },
   "dependencies": {
+    "bun-plugin-dts": "^0.2.3",
     "ws": "^8.17.1"
   }
 }
