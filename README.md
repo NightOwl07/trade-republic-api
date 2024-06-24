@@ -14,7 +14,7 @@ This project was created using bun v1.1.13. [Bun](https://bun.sh) is a fast all-
 ## Installation
 
 ```bash
-npm i https://github.com/nightowl07/trade-republic-api
+bun i NightOwl07/trade-republic-api
 ```
 
 ## Usage
