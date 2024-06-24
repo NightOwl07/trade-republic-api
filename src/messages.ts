@@ -44,7 +44,7 @@ export type MessageTypeMap = {
 
 export function createMessage<T extends keyof MessageTypeMap>(
     type: T,
-    data?: MessageTypeMap[T]
+    data?: Omit<MessageTypeMap[T], 'type'>
 ): MessageTypeMap[T] {
-    return { type, ...(data || {}) } as MessageTypeMap[T];
+    return { type, ...data } as MessageTypeMap[T];
 }
