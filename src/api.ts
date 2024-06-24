@@ -127,7 +127,7 @@ export class TRApi {
             throw new Error("WebSocket connection not established");
         }
         const id = this.subscriptions.length + 1;
-        this.ws.send(`sub ${id} ${JSON.stringify({ type: message.type, token: this.trSessionToken })}`);
+        this.ws.send(`sub ${id} ${JSON.stringify({ token: this.trSessionToken, ...message })}`);
         this.subscriptions.push({ id, topic: message.type, callback });
     }
 
