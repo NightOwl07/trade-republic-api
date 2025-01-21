@@ -6,6 +6,7 @@ interface InternalSubscription {
     id: number;
     topic: string;
     callback: (data: string | null) => void;
+    isOneTime: boolean;
 }
 
 export class TRApi {
@@ -19,6 +20,7 @@ export class TRApi {
     private trRefreshToken?: string;
     private subscriptions: InternalSubscription[] = [];
     private echoInterval: Timer | undefined;
+    private subCount: number = 1;
 
     constructor(private readonly phoneNo: string, private readonly pin: string) { }
 
@@ -123,12 +125,22 @@ export class TRApi {
     }
 
     public subscribe<T extends keyof MessageTypeMap>(message: Message<T>, callback: (data: string | null) => void): void {
+        this.subscribeInternal(message, callback, false);
+    }
+
+    public subscribeOnce<T extends keyof MessageTypeMap>(message: Message<T>, callback: (data: string | null) => void): void {
+        this.subscribeInternal(message, callback, true);
+    }
+
+    private subscribeInternal<T extends keyof MessageTypeMap>(message: Message<T>, callback: (data: string | null) => void, isOneTime: boolean): void {
         if (!this.ws) {
             throw new Error("WebSocket connection not established");
         }
-        const id = this.subscriptions.length + 1;
-        this.ws.send(`sub ${id} ${JSON.stringify({ token: this.trSessionToken, ...message })}`);
-        this.subscriptions.push({ id, topic: message.type, callback });
+
+        this.ws.send(`sub ${this.subCount} ${JSON.stringify({ token: this.trSessionToken, ...message })}`);
+        this.subscriptions.push({ id: this.subCount, topic: message.type, callback, isOneTime });
+
+        this.subCount++;
     }
 
     private echo(): void {
@@ -146,9 +158,16 @@ export class TRApi {
             return;
         }
 
-        const subscription = this.subscriptions.find(sub => sub.id === Number(data.id));
-        if (subscription) {
-            subscription.callback(data.jsonData);
+        const index = this.subscriptions.findIndex(sub => {
+            if (sub.id === Number(data.id)) {
+                sub.callback(data.jsonData);
+                return sub.isOneTime;
+            }
+            return false;
+        });
+
+        if (index !== -1) {
+            this.subscriptions.splice(index, 1);
         }
     }
 

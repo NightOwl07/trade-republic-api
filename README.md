@@ -26,7 +26,7 @@ const api = new TRApi("phoneNumber", "pin");
 await api.login();
 
 var portfolioMessage = createMessage("compactPortfolioByType");
-api.subscribe(portfolioMessage, (data) => {
+api.subscribeOnce(portfolioMessage, (data) => {
     if (!data) {
         return;
     }
@@ -48,6 +48,15 @@ api.subscribe(portfolioMessage, (data) => {
     console.log(companies);
 });
 
+// sub to tesla ticker on lsx (id = ISIN.Exchange [LSX | BHS | TUB | SGL | BVT ..])
+api.subscribe(createMessage("ticker", { id: "US88160R1014.LSX" }), (data) => {
+    if (!data) {
+        return;
+    }
+
+    console.log(data);
+});
+
 // search
 var searchMessage = createMessage("neonSearch", {
     data: {
@@ -61,7 +70,7 @@ var searchMessage = createMessage("neonSearch", {
     }
 });
 
-api.subscribe(searchMessage, (data) => {
+api.subscribeOnce(searchMessage, (data) => {
     console.log("serach data", data);
 });
 ```
