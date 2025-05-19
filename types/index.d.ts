@@ -165,11 +165,12 @@ export type MessageTypeMap = {
 	};
 };
 export declare function createMessage<T extends keyof MessageTypeMap>(type: T, data?: Omit<MessageTypeMap[T], "type">): MessageTypeMap[T];
-export declare class TRApi {
+export declare class TradeRepublicApi {
 	private readonly phoneNo;
 	private readonly pin;
-	private readonly host;
-	private readonly wss;
+	private static readonly HOST;
+	private static readonly WS_HOST;
+	private static readonly WS_CONNECT_VERSION;
 	private ws;
 	private processId?;
 	private cookies;
@@ -178,7 +179,8 @@ export declare class TRApi {
 	private subscriptions;
 	private echoInterval;
 	private subCount;
-	constructor(phoneNo: string, pin: string);
+	private readonly cookieFilePath;
+	constructor(phoneNo: string, pin: string, cookieStoragePath?: string);
 	login(): Promise<void>;
 	private performLogin;
 	private verifyPin;
@@ -192,6 +194,12 @@ export declare class TRApi {
 	private echo;
 	private handleWebSocketMessage;
 	private extractIdAndJson;
+	private saveCookiesToFile;
+	private loadCookiesFromFile;
+	private loadAndValidateSavedSession;
+	private clearLocalState;
+	private clearSavedCookiesAndState;
+	logout(): Promise<void>;
 }
 export interface Category {
 	categoryType: string;

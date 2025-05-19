@@ -1,20 +1,24 @@
 # trade-republic-api
-
 ## Overview
 
-TRApi is a TypeScript library designed to interact with the Trade Republic API. It facilitates logging in, maintaining a WebSocket connection, and subscribing to various message types. This project is currently under development.
-This project was created using bun v1.1.13. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime.
+TradeRepublicApi is a TypeScript library designed to interact with the Trade Republic API. It facilitates logging in, maintaining a WebSocket connection, subscribing to various message types, and managing session persistence. This project is currently under active development.
+
+This project was created using Bun v1.1.13. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime.
 
 ## Features
 
-- **Login**: Authenticate using phone number and PIN.
-- **WebSocket Connection**: Establish and maintain a connection with the Trade Republic WebSocket API.
-- **Subscriptions**: Subscribe to various message types and handle incoming data.
+-   **Login**: Authenticate using phone number and PIN.
+-   **Session Persistence**: Automatically saves and reuses login sessions to avoid frequent PIN entry. Session data is stored locally.
+-   **WebSocket Connection**: Establish and maintain a connection with the Trade Republic WebSocket API.
+-   **Subscriptions**: Subscribe to various message types (e.g., ticker data, portfolio updates) and handle incoming data.
+-   **Message Helper**: Includes a `createMessage` utility to easily construct messages for the API.
+-   **Logout**: Clear local session data.
 
 ## Installation
-
 ```bash
-bun i NightOwl07/trade-republic-api
+bun add NightOwl07/trade-republic-api
+# or npm install NightOwl07/trade-republic-api
+# or yarn add NightOwl07/trade-republic-api
 ```
 
 ## Usage
@@ -22,7 +26,7 @@ bun i NightOwl07/trade-republic-api
 Here is a basic example of how to use the api to get your portfolio and print all companies:
 
 ```typescript
-const api = new TRApi("phoneNumber", "pin");
+const api = new TradeRepublicApi("phoneNumber", "pin");
 await api.login();
 
 var portfolioMessage = createMessage("compactPortfolioByType");
@@ -73,17 +77,11 @@ var searchMessage = createMessage("neonSearch", {
 api.subscribeOnce(searchMessage, (data) => {
     console.log("serach data", data);
 });
+
+// clear local session
+// await api.logout();
 ```
 
-## Methods
-
-### `login()`
-
-Logs in to the Trade Republic API using the provided phone number and PIN.
-
-### `subscribe<T extends keyof MessageTypeMap>(message: Message<T>, callback: (data: string | null) => void)`
-
-Subscribes to a specific message type. The callback function is called whenever a message of the subscribed type is received.
 
 ## Contributing
 
