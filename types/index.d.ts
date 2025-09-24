@@ -5,7 +5,9 @@ export interface Message<T extends string> {
 }
 export type MessageTypeMap = {
 	customerPermissions: Message<"customerPermissions">;
-	compactPortfolioByType: Message<"compactPortfolioByType">;
+	compactPortfolioByType: Message<"compactPortfolioByType"> & {
+		secAccNo?: string;
+	};
 	portfolioStatus: Message<"portfolioStatus">;
 	orders: Message<"orders"> & {
 		terminated: boolean;
@@ -163,6 +165,19 @@ export type MessageTypeMap = {
 		pageSize: number;
 		after: string;
 	};
+	accountPairs: Message<"accountPairs">;
+	neonSearchAggregations: Message<"neonSearchAggregations"> & {
+		data: {
+			q: string;
+			filter: {
+				key: string;
+				value: string;
+			}[];
+		};
+	};
+	etfDetails: Message<"etfDetails"> & {
+		id: string;
+	};
 };
 export declare function createMessage<T extends keyof MessageTypeMap>(type: T, data?: Omit<MessageTypeMap[T], "type">): MessageTypeMap[T];
 export declare class TradeRepublicApi {
@@ -171,34 +186,115 @@ export declare class TradeRepublicApi {
 	private static readonly HOST;
 	private static readonly WS_HOST;
 	private static readonly WS_CONNECT_VERSION;
-	private ws;
-	private processId?;
-	private cookies;
+	private ws?;
 	private trSessionToken?;
 	private trRefreshToken?;
+	private rawCookies;
+	private processId?;
 	private subscriptions;
-	private echoInterval;
-	private subCount;
+	private nextSubscriptionId;
+	private echoIntervalId?;
 	private readonly cookieFilePath;
+	private reconnectAttempts;
+	private pendingSubs;
+	/**
+	 * Initializes a new instance of the TradeRepublicApi.
+	 * @param phoneNo The phone number associated with the Trade Republic account.
+	 * @param pin The PIN for the Trade Republic account.
+	 * @param cookieStoragePath Optional path to store session cookies. Defaults to user's home directory.
+	 */
 	constructor(phoneNo: string, pin: string, cookieStoragePath?: string);
-	login(): Promise<void>;
-	private performLogin;
-	private verifyPin;
-	private setupWebSocket;
-	private request;
-	private askQuestion;
-	private extractCookie;
-	subscribe<T extends keyof MessageTypeMap>(message: Message<T>, callback: (data: string | null) => void): void;
-	subscribeOnce<T extends keyof MessageTypeMap>(message: Message<T>, callback: (data: string | null) => void): void;
-	private subscribeInternal;
-	private echo;
-	private handleWebSocketMessage;
-	private extractIdAndJson;
-	private saveCookiesToFile;
-	private loadCookiesFromFile;
+	/**
+	 * Logs into Trade Republic. It first attempts to use a saved session,
+	 * then falls back to a full login flow if necessary.
+	 * @param getDevicePin callback that returns the device PIN sent to the phone.
+	 */
+	login(getDevicePin?: () => Promise<string>): Promise<boolean>;
+	/**
+	 * Performs the initial step of the login process to get a processId.
+	 */
+	private _performInitialLoginStep;
+	/**
+	 * Verifies the device PIN.
+	 * @param devicePin The PIN received on the user's device.
+	 */
+	private _verifyDevicePin;
+	/**
+	 * Sets up the WebSocket connection.
+	 */
+	private _setupWebSocket;
+	/**
+	 * Gracefully closes the WebSocket connection and clears related resources.
+	 */
+	private _closeWebSocket;
+	/**
+	 * Makes an HTTP request to the Trade Republic API with timeout and optional cookies.
+	 */
+	private _request;
+	/**
+	 * Asks a question to the user via the console. Default PIN provider.
+	 */
+	private _askDevicePinFromStdin;
+	/**
+	 * Extracts a specific cookie value from the raw cookies.
+	 */
+	private _extractCookieValue;
+	/**
+	 * Subscribe to a topic. Returns the subscription id.
+	 */
+	subscribe<T extends keyof MessageTypeMap>(message: Message<T>, callback: (data: string | null) => void): number;
+	/**
+	 * Subscribe once to a topic. Returns the subscription id.
+	 */
+	subscribeOnce<T extends keyof MessageTypeMap>(message: Message<T>, callback: (data: string | null) => void): number;
+	/**
+	 * Unsubscribe by id.
+	 */
+	unsubscribe(id: number): void;
+	private _subscribeInternal;
+	private _flushPendingSubs;
+	private _resubscribeAll;
+	private _scheduleReconnect;
+	private _startEcho;
+	private _clearEchoInterval;
+	private _sendEcho;
+	private _handleWebSocketMessage;
+	/**
+	 * Parses a raw WebSocket message string into its ID and JSON payload.
+	 */
+	private _parseWebSocketPayload;
+	/**
+	 * Saves the current session (tokens and cookies) to a file.
+	 */
+	private _saveSessionToFile;
+	/**
+	 * Loads session data from the cookie file.
+	 */
+	private _loadSessionFromFile;
+	/**
+	 * Attempts to load a saved session and validate it via WebSocket.
+	 */
 	private loadAndValidateSavedSession;
-	private clearLocalState;
-	private clearSavedCookiesAndState;
+	/**
+	 * Performs a lightweight subscription to check if the current session token is valid.
+	 */
+	private _performSessionValidationSubscription;
+	/**
+	 * Clears all local state (tokens, cookies, processId, WebSocket, timers).
+	 * Does NOT clear the persisted cookie file.
+	 */
+	private _clearLocalRuntimeState;
+	/**
+	 * Deletes the saved session file from disk.
+	 */
+	private _deleteSavedSessionFile;
+	/**
+	 * Clears local runtime state and optionally the persisted session file.
+	 */
+	private _clearSessionAndConnection;
+	/**
+	 * Logs out by clearing local state and the saved session file.
+	 */
 	logout(): Promise<void>;
 }
 export interface Category {

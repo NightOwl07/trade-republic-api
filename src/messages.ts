@@ -4,7 +4,9 @@ export interface Message<T extends string> {
 
 export type MessageTypeMap = {
     customerPermissions: Message<"customerPermissions">;
-    compactPortfolioByType: Message<"compactPortfolioByType">;
+    compactPortfolioByType: Message<"compactPortfolioByType"> & {
+        secAccNo?: string;
+    };
     portfolioStatus: Message<"portfolioStatus">;
     orders: Message<"orders"> & { terminated: boolean };
     cash: Message<"cash">;
@@ -154,6 +156,16 @@ export type MessageTypeMap = {
         optionType: "call" | "put" | "long" | "short";
         pageSize: number;
         after: string;
+    };
+    accountPairs: Message<"accountPairs">;
+    neonSearchAggregations: Message<"neonSearchAggregations"> & {
+        data: {
+            q: string;
+            filter: { key: string; value: string }[];
+        };
+    };
+    etfDetails: Message<"etfDetails"> & {
+        id: string;
     };
 };
 
