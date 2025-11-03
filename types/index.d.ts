@@ -141,17 +141,25 @@ export type MessageTypeMap = {
 		parameters: {
 			instrumentId: string;
 			exchangeId: string;
-			mode: string;
-			type: string;
+			mode: "market" | "limit" | "stopMarket";
+			type: "buy" | "sell";
 			size: number;
 			expiry: {
-				type: string;
+				type: "gfd";
+				value?: string;
 			};
+			acceptedTerms?: [
+				{
+					groupId: string;
+					groupName: string;
+				}
+			];
 			sellFractions: boolean;
 			lastClientPrice: number;
 		};
 		warningsShown: string[];
 		clientProcessId: string;
+		secAccNo: string;
 	};
 	derivatives: Message<"derivatives"> & {
 		jurisdiction: string;
@@ -178,6 +186,27 @@ export type MessageTypeMap = {
 	etfDetails: Message<"etfDetails"> & {
 		id: string;
 	};
+	removeFromWatchlist: Message<"removeFromWatchlist"> & {
+		instrumentId: string;
+		watchlistId: "favorites";
+	};
+	addToWatchlist: Message<"addToWatchlist"> & {
+		instrumentId: string;
+		watchlistId: "favorites";
+	};
+	etfComposition: Message<"etfComposition"> & {
+		id: string;
+	};
+	cancelOrder: Message<"cancelOrder"> & {
+		id: string;
+	};
+	stockDetailDividends: Message<"stockDetailDividends"> & {
+		id: string;
+	};
+	bondValuation: Message<"bondValuation"> & {
+		instrumentId: string;
+	};
+	neonSearchTags: Message<"neonSearchTags">;
 };
 export declare function createMessage<T extends keyof MessageTypeMap>(type: T, data?: Omit<MessageTypeMap[T], "type">): MessageTypeMap[T];
 export declare class TradeRepublicApi {
@@ -198,57 +227,57 @@ export declare class TradeRepublicApi {
 	private reconnectAttempts;
 	private pendingSubs;
 	/**
-	 * Initializes a new instance of the TradeRepublicApi.
-	 * @param phoneNo The phone number associated with the Trade Republic account.
-	 * @param pin The PIN for the Trade Republic account.
-	 * @param cookieStoragePath Optional path to store session cookies. Defaults to user's home directory.
+	 * Initializes a new instance of the TradeRepublicApi
+	 * @param phoneNo The phone number associated with the Trade Republic account
+	 * @param pin The PIN for the Trade Republic account
+	 * @param cookieStoragePath Optional path to store session cookies. Defaults to user's home directory
 	 */
 	constructor(phoneNo: string, pin: string, cookieStoragePath?: string);
 	/**
 	 * Logs into Trade Republic. It first attempts to use a saved session,
-	 * then falls back to a full login flow if necessary.
-	 * @param getDevicePin callback that returns the device PIN sent to the phone.
+	 * then falls back to a full login flow if necessary
+	 * @param getDevicePin callback that returns the device PIN sent to the phone
 	 */
 	login(getDevicePin?: () => Promise<string>): Promise<boolean>;
 	/**
-	 * Performs the initial step of the login process to get a processId.
+	 * Performs the initial step of the login process to get a processId
 	 */
 	private _performInitialLoginStep;
 	/**
-	 * Verifies the device PIN.
-	 * @param devicePin The PIN received on the user's device.
+	 * Verifies the device PIN
+	 * @param devicePin The PIN received on the user's device
 	 */
 	private _verifyDevicePin;
 	/**
-	 * Sets up the WebSocket connection.
+	 * Sets up the WebSocket connection
 	 */
 	private _setupWebSocket;
 	/**
-	 * Gracefully closes the WebSocket connection and clears related resources.
+	 * Gracefully closes the WebSocket connection and clears related resources
 	 */
 	private _closeWebSocket;
 	/**
-	 * Makes an HTTP request to the Trade Republic API with timeout and optional cookies.
+	 * Makes an HTTP request to the Trade Republic API with timeout and optional cookies
 	 */
 	private _request;
 	/**
-	 * Asks a question to the user via the console. Default PIN provider.
+	 * Asks a question to the user via the console
 	 */
 	private _askDevicePinFromStdin;
 	/**
-	 * Extracts a specific cookie value from the raw cookies.
+	 * Extracts a specific cookie value from the raw cookies
 	 */
 	private _extractCookieValue;
 	/**
-	 * Subscribe to a topic. Returns the subscription id.
+	 * Subscribe to a topic. Returns the subscription id
 	 */
 	subscribe<T extends keyof MessageTypeMap>(message: Message<T>, callback: (data: string | null) => void): number;
 	/**
-	 * Subscribe once to a topic. Returns the subscription id.
+	 * Subscribe once to a topic. Returns the subscription id
 	 */
 	subscribeOnce<T extends keyof MessageTypeMap>(message: Message<T>, callback: (data: string | null) => void): number;
 	/**
-	 * Unsubscribe by id.
+	 * Unsubscribe by id
 	 */
 	unsubscribe(id: number): void;
 	private _subscribeInternal;
@@ -260,40 +289,40 @@ export declare class TradeRepublicApi {
 	private _sendEcho;
 	private _handleWebSocketMessage;
 	/**
-	 * Parses a raw WebSocket message string into its ID and JSON payload.
+	 * Parses a raw WebSocket message string into its ID and JSON payload
 	 */
 	private _parseWebSocketPayload;
 	/**
-	 * Saves the current session (tokens and cookies) to a file.
+	 * Saves the current session (tokens and cookies) to a file
 	 */
 	private _saveSessionToFile;
 	/**
-	 * Loads session data from the cookie file.
+	 * Loads session data from the cookie file
 	 */
 	private _loadSessionFromFile;
 	/**
-	 * Attempts to load a saved session and validate it via WebSocket.
+	 * Attempts to load a saved session and validate it via WebSocket
 	 */
 	private loadAndValidateSavedSession;
 	/**
-	 * Performs a lightweight subscription to check if the current session token is valid.
+	 * Performs a lightweight subscription to check if the current session token is valid
 	 */
 	private _performSessionValidationSubscription;
 	/**
-	 * Clears all local state (tokens, cookies, processId, WebSocket, timers).
-	 * Does NOT clear the persisted cookie file.
+	 * Clears all local state (tokens, cookies, processId, WebSocket, timers)
+	 * Does NOT clear the persisted cookie file
 	 */
 	private _clearLocalRuntimeState;
 	/**
-	 * Deletes the saved session file from disk.
+	 * Deletes the saved session file from disk
 	 */
 	private _deleteSavedSessionFile;
 	/**
-	 * Clears local runtime state and optionally the persisted session file.
+	 * Clears local runtime state and optionally the persisted session file
 	 */
 	private _clearSessionAndConnection;
 	/**
-	 * Logs out by clearing local state and the saved session file.
+	 * Logs out by clearing local state and the saved session file
 	 */
 	logout(): Promise<void>;
 }
