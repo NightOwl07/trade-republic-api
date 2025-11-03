@@ -135,15 +135,25 @@ export type MessageTypeMap = {
         parameters: {
             instrumentId: string;
             exchangeId: string;
-            mode: string;
-            type: string;
+            mode: "market" | "limit" | "stopMarket";
+            type: "buy" | "sell";
             size: number;
-            expiry: { type: string };
+            expiry: {
+                type: "gfd"
+                value?: string; // date for limit and stopMarket e.g. 2026-10-29
+            };
+            acceptedTerms?: [
+                {
+                    groupId: string;
+                    groupName: string;
+                }
+            ];
             sellFractions: boolean;
             lastClientPrice: number;
         };
         warningsShown: string[];
         clientProcessId: string;
+        secAccNo: string;
     };
     derivatives: Message<"derivatives"> & {
         jurisdiction: string;
@@ -167,6 +177,27 @@ export type MessageTypeMap = {
     etfDetails: Message<"etfDetails"> & {
         id: string;
     };
+    removeFromWatchlist: Message<"removeFromWatchlist"> & {
+        instrumentId: string;
+        watchlistId: "favorites";
+    };
+    addToWatchlist: Message<"addToWatchlist"> & {
+        instrumentId: string;
+        watchlistId: "favorites";
+    };
+    etfComposition: Message<"etfComposition"> & {
+        id: string;
+    };
+    cancelOrder: Message<"cancelOrder"> & {
+        id: string;
+    };
+    stockDetailDividends: Message<"stockDetailDividends"> & {
+        id: string;
+    };
+    bondValuation: Message<"bondValuation"> & {
+        instrumentId: string;
+    };
+    neonSearchTags: Message<"neonSearchTags">;
 };
 
 export function createMessage<T extends keyof MessageTypeMap>(
