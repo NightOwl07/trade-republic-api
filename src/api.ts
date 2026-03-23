@@ -4,6 +4,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { createMessage, type Message, type MessageTypeMap } from './messages';
 import { WebSocket } from 'ws';
+import puppeteer, { Browser, Page } from 'puppeteer';
 
 interface InternalSubscription {
     id: number;
@@ -28,7 +29,8 @@ const HTTP_TIMEOUT_MS = 10_000;
 export class TradeRepublicApi {
     private static readonly HOST = "https://api.traderepublic.com" as const;
     private static readonly WS_HOST = "wss://api.traderepublic.com" as const;
-    private static readonly WS_CONNECT_VERSION = "31" as const;
+    private static readonly WS_CONNECT_VERSION = "34" as const;
+    private static readonly MAX_RECONNECT_ATTEMPTS = 10;
 
     private ws?: WebSocket;
     private trSessionToken?: string;
@@ -45,6 +47,10 @@ export class TradeRepublicApi {
 
     private reconnectAttempts = 0;
     private pendingSubs: Array<() => void> = [];
+
+    private browser?: Browser;
+    private page?: Page;
+    private currentWafToken?: string;
 
     /**
      * Initializes a new instance of the TradeRepublicApi
@@ -72,6 +78,8 @@ export class TradeRepublicApi {
     async login(getDevicePin: () => Promise<string> = this._askDevicePinFromStdin): Promise<boolean> {
         console.info("Attempting to log in...");
         try {
+            await this._getWafToken();
+
             if (await this.loadAndValidateSavedSession()) {
                 console.log("Successfully logged in using saved session. WebSocket setup completed.");
                 return true;
@@ -96,6 +104,45 @@ export class TradeRepublicApi {
             await this._clearSessionAndConnection(false);
             return false;
         }
+    }
+
+    private async _getWafToken(forceRefresh = false): Promise<string> {
+        if (this.currentWafToken && !forceRefresh) {
+            return this.currentWafToken;
+        }
+
+        console.info("Retrieving AWS WAF Token via Puppeteer...");
+
+        if (!this.browser || !this.page) {
+            this.browser = await puppeteer.launch({
+                headless: true,
+                args: ['--no-sandbox', '--disable-setuid-sandbox']
+            });
+            this.page = await this.browser.newPage();
+
+            await this.page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
+
+            console.info("Loading Trade Republic Web to bypass AWS WAF...");
+            await this.page.goto('https://app.traderepublic.com', { waitUntil: 'networkidle2' });
+        }
+
+        await this.page.waitForFunction('window.AwsWafIntegration !== undefined', { timeout: 15000 });
+
+        const token = await this.page.evaluate(async (force: boolean) => {
+            // @ts-ignore
+            const aws = window.AwsWafIntegration;
+            if (force && typeof aws.forceRefreshToken === 'function') {
+                return await aws.forceRefreshToken();
+            }
+            return await aws.getToken();
+        }, forceRefresh);
+
+        if (!token) {
+            throw new Error("Failed to retrieve AWS WAF token from Puppeteer context.");
+        }
+
+        this.currentWafToken = token;
+        return token;
     }
 
     /**
@@ -157,7 +204,15 @@ export class TradeRepublicApi {
         this._clearEchoInterval();
 
         console.info(`Attempting to connect to WebSocket at ${TradeRepublicApi.WS_HOST}`);
-        this.ws = new WebSocket(TradeRepublicApi.WS_HOST);
+
+        const wsHeaders: { [key: string]: string } = {};
+        if (this.rawCookies.length > 0) {
+            wsHeaders["Cookie"] = this.rawCookies.map((c) => c.split(";")[0]).join("; ");
+        }
+
+        this.ws = new WebSocket(TradeRepublicApi.WS_HOST, {
+            headers: wsHeaders
+        });
 
         await new Promise<void>((resolve, reject) => {
             const timeoutId = setTimeout(() => {
@@ -249,15 +304,21 @@ export class TradeRepublicApi {
     }
 
     /**
-     * Makes an HTTP request to the Trade Republic API with timeout and optional cookies
+     * Makes an HTTP request to the Trade Republic API with timeout and cookies
      */
     private async _request(
         urlPath: string,
         payload: any = null,
         method: string = "POST",
-        sendAuthCookies: boolean = false
+        sendAuthCookies: boolean = false,
+        isRetry: boolean = false
     ): Promise<Response> {
-        const headers: HeadersInit = { "Content-Type": "application/json" };
+        const wafToken = await this._getWafToken();
+
+        const headers: HeadersInit = {
+            "Content-Type": "application/json",
+            "X-aws-waf-token": wafToken
+        };
 
         if (sendAuthCookies && this.rawCookies.length > 0) {
             headers["Cookie"] = this.rawCookies.map((c) => c.split(";")[0]).join("; ");
@@ -272,7 +333,15 @@ export class TradeRepublicApi {
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), HTTP_TIMEOUT_MS);
         try {
-            return await fetch(`${TradeRepublicApi.HOST}${urlPath}`, { ...options, signal: ctrl.signal });
+            const response = await fetch(`${TradeRepublicApi.HOST}${urlPath}`, { ...options, signal: ctrl.signal });
+
+            if (!isRetry && (response.status === 405 || response.status === 403)) {
+                console.warn(`Received ${response.status} from TR API. AWS Token might be expired. Refreshing...`);
+                await this._getWafToken(true);
+                return await this._request(urlPath, payload, method, sendAuthCookies, true);
+            }
+
+            return response;
         } finally {
             clearTimeout(timer);
         }
@@ -401,11 +470,17 @@ export class TradeRepublicApi {
     }
 
     private _scheduleReconnect(): void {
+        if (this.reconnectAttempts >= TradeRepublicApi.MAX_RECONNECT_ATTEMPTS) {
+            console.error("Max reconnect attempts reached. Giving up.");
+            return;
+        }
         const delay = Math.min(30_000, 1_000 * 2 ** this.reconnectAttempts++);
         setTimeout(async () => {
             try {
                 await this._setupWebSocket();
-            } catch { }
+            } catch (err) {
+                console.warn("Reconnect failed:", (err as Error).message);
+            }
         }, delay);
     }
 
@@ -661,7 +736,7 @@ export class TradeRepublicApi {
     }
 
     /**
-     * Clears all local state (tokens, cookies, processId, WebSocket, timers)
+     * Clears all local state (tokens, cookies, processId, WebSocket, timers, browser)
      * Does NOT clear the persisted cookie file
      */
     private async _clearLocalRuntimeState(): Promise<void> {
@@ -674,6 +749,14 @@ export class TradeRepublicApi {
         this.nextSubscriptionId = 1;
         this.pendingSubs = [];
         await this._closeWebSocket();
+
+        if (this.browser) {
+            console.info("Closing Puppeteer browser...");
+            await this.browser.close();
+            this.browser = undefined;
+            this.page = undefined;
+            this.currentWafToken = undefined;
+        }
     }
 
     /**

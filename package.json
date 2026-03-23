@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "bun-plugin-dts": "^0.2.3",
+    "puppeteer": "^24.40.0",
     "ws": "^8.17.1"
   }
 }
