@@ -215,6 +215,7 @@ export declare class TradeRepublicApi {
 	private static readonly HOST;
 	private static readonly WS_HOST;
 	private static readonly WS_CONNECT_VERSION;
+	private static readonly MAX_RECONNECT_ATTEMPTS;
 	private ws?;
 	private trSessionToken?;
 	private trRefreshToken?;
@@ -226,6 +227,9 @@ export declare class TradeRepublicApi {
 	private readonly cookieFilePath;
 	private reconnectAttempts;
 	private pendingSubs;
+	private browser?;
+	private page?;
+	private currentWafToken?;
 	/**
 	 * Initializes a new instance of the TradeRepublicApi
 	 * @param phoneNo The phone number associated with the Trade Republic account
@@ -239,6 +243,7 @@ export declare class TradeRepublicApi {
 	 * @param getDevicePin callback that returns the device PIN sent to the phone
 	 */
 	login(getDevicePin?: () => Promise<string>): Promise<boolean>;
+	private _getWafToken;
 	/**
 	 * Performs the initial step of the login process to get a processId
 	 */
@@ -257,7 +262,7 @@ export declare class TradeRepublicApi {
 	 */
 	private _closeWebSocket;
 	/**
-	 * Makes an HTTP request to the Trade Republic API with timeout and optional cookies
+	 * Makes an HTTP request to the Trade Republic API with timeout and cookies
 	 */
 	private _request;
 	/**
@@ -309,7 +314,7 @@ export declare class TradeRepublicApi {
 	 */
 	private _performSessionValidationSubscription;
 	/**
-	 * Clears all local state (tokens, cookies, processId, WebSocket, timers)
+	 * Clears all local state (tokens, cookies, processId, WebSocket, timers, browser)
 	 * Does NOT clear the persisted cookie file
 	 */
 	private _clearLocalRuntimeState;
