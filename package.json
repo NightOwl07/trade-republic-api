@@ -1,11 +1,37 @@
 {
   "name": "trapi",
-  "version": "0.0.1",
+  "version": "0.1.0",
+  "description": "TypeScript library for the Trade Republic API",
+  "license": "GPL-3.0",
+  "author": "NightOwl07",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NightOwl07/trade-republic-api.git"
+  },
+  "homepage": "https://github.com/NightOwl07/trade-republic-api#readme",
+  "bugs": {
+    "url": "https://github.com/NightOwl07/trade-republic-api/issues"
+  },
+  "keywords": [
+    "trade-republic",
+    "traderepublic",
+    "api",
+    "trading",
+    "stocks",
+    "websocket"
+  ],
   "module": "src/index.ts",
   "types": "types/index.d.ts",
   "type": "module",
+  "files": [
+    "src",
+    "types",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "bun run build.mjs",
+    "typecheck": "tsc --noEmit",
     "prepublishOnly": "bun run build"
   },
   "devDependencies": {

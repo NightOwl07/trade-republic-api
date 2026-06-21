@@ -12,6 +12,9 @@ export interface Position {
     isin: string;
     averageBuyIn: string;
     netSize: string;
+    virtualSize?: string;
+    status?: string;
+    isIPO?: boolean;
 }
 
 export interface DerivativeInfo {
