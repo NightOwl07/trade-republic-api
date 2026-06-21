@@ -1,68 +1,88 @@
 # trade-republic-api
+
 ## Overview
 
-TradeRepublicApi is a TypeScript library designed to interact with the Trade Republic API. It facilitates logging in, maintaining a WebSocket connection, subscribing to various message types, and managing session persistence. This project is currently under active development.
+TradeRepublicApi is a TypeScript library for interacting with the Trade Republic API. It supports logging in, maintaining a WebSocket connection, subscribing to various message types, and managing sessions.
 
 This project was created using Bun v1.1.13. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime.
 
+> **Note:** This project is still under active development. Features may change, and there may be bugs or incomplete functionality. Please use with caution.
+
 ## Features
 
--   **Login**: Authenticate using phone number and PIN.
--   **Session Persistence**: Automatically saves and reuses login sessions to avoid frequent PIN entry. Session data is stored locally.
--   **WebSocket Connection**: Establish and maintain a connection with the Trade Republic WebSocket API.
--   **Subscriptions**: Subscribe to various message types (e.g., ticker data, portfolio updates) and handle incoming data.
--   **Message Helper**: Includes a `createMessage` utility to easily construct messages for the API.
--   **Logout**: Clear local session data.
+-   **Login**: Authenticate using phone number and PIN, including app confirmation.
+-   **AWS WAF Bypass**: Automatically fetches a WAF token via Puppeteer.
+-   **Session Persistence**: Sessions are saved locally (`~/.tr_api_cookies.json`) and refreshed via refresh token when needed.
+-   **WebSocket Connection**: Setup, echo keepalive, and automatic reconnect with exponential backoff.
+-   **Subscriptions**: Typed subscriptions to many topics via `createMessage` + `subscribe`/`subscribeOnce`.
+-   **Events**: `open`, `close`, `reconnecting`, `reconnect_failed`, `error`.
+-   **Pluggable Logging**: Inject your own `Logger` or `silentLogger`; defaults to `console`.
+-   **Logout**: Clears local session data and the persisted session file.
+
+## Requirements
+
+-   **Runtime**: [Bun](https://bun.sh) v1.1.13 or newer (alternatively Node.js 18+ with `npm`/`yarn`).
+-   **Trade Republic Account**: An active phone number and PIN.
+-   **Trade Republic App**: The phone running the app must be available during the first login to confirm the sign-in.
+-   **Puppeteer**: Used for the WAF token bypass. The browser is launched headless.
 
 ## Installation
+
 ```bash
 bun add NightOwl07/trade-republic-api
-# or npm install NightOwl07/trade-republic-api
-# or yarn add NightOwl07/trade-republic-api
+# or
+npm install NightOwl07/trade-republic-api
+# or
+yarn add NightOwl07/trade-republic-api
 ```
 
 ## Usage
 
-Here is a basic example of how to use the api to get your portfolio and print all companies:
+### Constructor
 
 ```typescript
-const api = new TradeRepublicApi("phoneNumber", "pin");
+new TradeRepublicApi(
+    phoneNo,             // e.g. "+4912345678910"
+    pin,                 // Trade Republic PIN
+    cookieStoragePath?,  // optional: custom path for the session file (default: ~/.tr_api_cookies.json)
+    logger?              // optional: custom logger (default: console)
+)
+```
+
+### Example: Portfolio & Ticker
+
+Subscription callbacks receive the already-parsed, typed response.
+
+```typescript
+import { TradeRepublicApi, createMessage } from "trapi";
+
+const api = new TradeRepublicApi("+4912345678910", "1234");
 await api.login();
 
-var portfolioMessage = createMessage("compactPortfolioByType");
-api.subscribeOnce(portfolioMessage, (data) => {
-    if (!data) {
-        return;
-    }
+// Fetch portfolio and print company names
+const portfolioMessage = createMessage("compactPortfolioByType");
+api.subscribeOnce(portfolioMessage, (portfolio) => {
+    if (!portfolio) return;
 
-    var portfolio: Portfolio = JSON.parse(data);
-
-    var categories = portfolio.categories.filter(c => c.categoryType != "cryptos");
-
-    if (!categories) {
-        return;
-    }
-
-    let companies: string[] = Array.from(new Set(categories.flatMap(category =>
-        category.positions.map(pos =>
-            pos.derivativeInfo ? pos.derivativeInfo.underlying.shortName : pos.name
-        )
-    )));
+    const categories = portfolio.categories.filter(c => c.categoryType !== "cryptos");
+    const companies: string[] = Array.from(new Set(
+        categories.flatMap(category => category.positions.map(pos => pos.name))
+    ));
 
     console.log(companies);
 });
 
-// sub to tesla ticker on lsx (id = ISIN.Exchange [LSX | BHS | TUB | SGL | BVT ..])
+// Subscribe to the Tesla ticker (format: ISIN.Exchange, e.g. LSX | BHS | TUB | SGL | BVT)
 api.subscribe(createMessage("ticker", { id: "US88160R1014.LSX" }), (data) => {
-    if (!data) {
-        return;
-    }
-
+    if (!data) return;
     console.log(data);
 });
+```
 
-// search
-var searchMessage = createMessage("neonSearch", {
+### Example: Search
+
+```typescript
+const searchMessage = createMessage("neonSearch", {
     data: {
         q: "amd",
         page: 1,
@@ -74,18 +94,65 @@ var searchMessage = createMessage("neonSearch", {
     }
 });
 
-api.subscribeOnce(searchMessage, (data) => {
-    console.log("serach data", data);
+api.subscribeOnce(searchMessage, (results) => {
+    console.log("Search results:", results?.results);
 });
-
-// clear local session
-// await api.logout();
 ```
 
+### Login Notes
+
+- If a valid saved session exists, it is reused (no PIN/app confirmation required).
+- If the session is invalid, the library attempts a refresh via the refresh token.
+- Only if both fail does the full login flow (including app confirmation) run.
+
+### Events
+
+```typescript
+api.on("open",             () => console.log("WS connected"));
+api.on("close",            (code, reason) => console.log("WS closed", code, reason));
+api.on("reconnecting",     (attempt, delayMs) => console.log(`Reconnect ${attempt} in ${delayMs}ms`));
+api.on("reconnect_failed", () => console.log("Reconnect permanently failed"));
+api.on("error",            (err) => console.error("Error:", err));
+```
+
+### Logging
+
+By default, the library logs to `console`. Pass a custom `Logger` (4th constructor argument) to route logs elsewhere or silence them entirely:
+
+```typescript
+import { TradeRepublicApi, silentLogger } from "trapi";
+
+// Silence all library logging:
+const api = new TradeRepublicApi("+49...", "1234", undefined, silentLogger);
+
+// Or inject your own sink (e.g. pino, winston):
+const api2 = new TradeRepublicApi("+49...", "1234", undefined, {
+    debug: () => {},                       // drop debug
+    info:  (...a) => myLog.info(a),
+    warn:  (...a) => myLog.warn(a),
+    error: (...a) => myLog.error(a),
+});
+```
+
+### Logout
+
+```typescript
+// Clear local session and remove the saved session file
+await api.logout();
+```
+
+## Development
+
+```bash
+bun install        # install dependencies
+bun run build      # build types + output to ./types (via build.mjs)
+bun run typecheck  # tsc --noEmit
+```
 
 ## Contributing
 
 Contributions are welcome! Please fork the repository and submit a pull request with your changes.
+
 ---
 
-**Note:** This project is still in development. Features and functionalities may change, and there may be bugs or incomplete features. Please use with caution.
+**Disclaimer:** This project is not officially affiliated with Trade Republic. Use at your own risk.
