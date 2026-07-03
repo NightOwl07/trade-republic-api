@@ -233,12 +233,12 @@ export type MessageTypeMap = {
 		lang: string;
 		underlying: string;
 		productCategory: "knockOutProduct" | "vanillaWarrant" | "factorCertificate";
-		leverage: number;
+		leverage?: number;
 		sortBy: "leverage" | "factor" | "strike";
 		sortDirection: string;
 		optionType: "call" | "put" | "long" | "short";
 		pageSize: number;
-		after: string;
+		after?: string;
 	};
 	accountPairs: Message<"accountPairs">;
 	neonSearchAggregations: Message<"neonSearchAggregations"> & {
@@ -274,6 +274,57 @@ export type MessageTypeMap = {
 		instrumentId: string;
 	};
 	neonSearchTags: Message<"neonSearchTags">;
+	compactPortfolioByTypeV2: Message<"compactPortfolioByTypeV2"> & {
+		secAccNo: string;
+	};
+	cryptoPortfolioStatus: Message<"cryptoPortfolioStatus"> & {
+		secAccNo: string;
+	};
+	fixedIncomePortfolioStatus: Message<"fixedIncomePortfolioStatus"> & {
+		secAccNo: string;
+	};
+	privateMarketsPortfolioStatus: Message<"privateMarketsPortfolioStatus"> & {
+		secAccNo: string;
+	};
+	privateMarketsPositions: Message<"privateMarketsPositions"> & {
+		secAccNo: string;
+	};
+	priceAlarms: Message<"priceAlarms">;
+	priceForOrderV2: Message<"priceForOrderV2"> & {
+		isin: string;
+		exchangeId: string;
+		side: "buy" | "sell";
+		unit: string;
+	};
+	tape: Message<"tape"> & {
+		isin: string;
+		exchangeId: string;
+		unit: string;
+	};
+	tickerV2: Message<"tickerV2"> & {
+		isin: string;
+		exchangeId: string;
+		unit: string;
+	};
+	tradingStatus: Message<"tradingStatus"> & {
+		isin: string;
+		exchangeId: string;
+		currencyCode: string;
+	};
+	tradeAggregateHistory: Message<"tradeAggregateHistory"> & {
+		isin: string;
+		exchangeId: string;
+		resolution: number;
+		from: number;
+		until: number;
+	};
+	bondValuationV2: Message<"bondValuationV2"> & {
+		instrumentId: string;
+		secAccNo: string;
+	};
+	stockDetailKpis: Message<"stockDetailKpis"> & {
+		id: string;
+	};
 };
 export interface Money {
 	value: string | number;
@@ -498,6 +549,11 @@ export interface CollectionCover {
 	medium: CollectionImageEntry[];
 	large: CollectionImageEntry[];
 }
+export interface WatchlistInstrument {
+	instrument_id: string;
+	created_at?: unknown;
+	holding_percent?: number;
+}
 export interface Watchlist {
 	id: string;
 	cover?: CollectionCover;
@@ -507,7 +563,7 @@ export interface Watchlist {
 	description_short?: string;
 	created_at?: string;
 	updated_at?: string;
-	instruments?: string[];
+	instruments?: WatchlistInstrument[];
 	following?: boolean;
 	following_allowed?: boolean;
 	editing_allowed?: boolean;
@@ -658,6 +714,8 @@ export interface AccountPair {
 	currency: string;
 	accountAccessType: string;
 }
+/** @deprecated Use `Position` from the portfolio module (the canonical type). */
+export type PortfolioPosition = Position$1;
 export interface PortfolioStatusResponse {
 	status: string;
 	hasInvested: boolean;
@@ -671,6 +729,262 @@ export interface PortfolioStatusResponse {
 	bondsTermsRequired: boolean;
 	privateFundTermsRequired: boolean;
 	dmaTermsRequired: boolean;
+}
+export interface CompactPortfolioPosition {
+	isin: string;
+	averageBuyIn: {
+		value: number;
+		currency: string;
+	};
+	netSize: number;
+	virtualSize: number;
+	status: string;
+	instrumentType: string;
+	name: string;
+	derivativeInfo: unknown;
+	bondInfo: unknown;
+	imageId: string;
+	isIPO: boolean;
+}
+export interface CompactPortfolioCategory {
+	categoryType: string;
+	positions: CompactPortfolioPosition[];
+}
+export interface CompactPortfolioByTypeV2Response {
+	categories: CompactPortfolioCategory[];
+}
+export interface PortfolioStatusBaseV2 {
+	securitiesAccountNumber: string;
+	cashAccountNumber: string;
+	hasInvested: boolean;
+	status: string;
+}
+export interface CryptoPortfolioStatusResponse extends PortfolioStatusBaseV2 {
+	hasEnrolled: boolean;
+}
+export type FixedIncomePortfolioStatusResponse = PortfolioStatusBaseV2;
+export interface PrivateMarketsPortfolioStatusResponse extends PortfolioStatusBaseV2 {
+	termsRequired: boolean;
+}
+export interface PrivateMarketsPositionsResponse {
+	positions: unknown[];
+}
+export interface WsError {
+	errorCode: string;
+	errorField: string | null;
+	errorMessage: string;
+	meta: {
+		source: string;
+	};
+}
+export interface TickerV2Response {
+	time: number;
+	bidPrice: string;
+	askPrice: string;
+	bidSize: string;
+	askSize: string;
+	prePrice: string;
+	openPrice: string;
+	unit: string;
+	errors?: WsError[];
+}
+export interface TapeResponse {
+	time: number;
+	price: string;
+	size: string;
+	side: "buy" | "sell";
+	unit: string;
+	sourceCurrency: string;
+}
+export interface PriceForOrderV2Response {
+	time: number;
+	price: string;
+	bidPrice: string;
+	askPrice: string;
+	unit: string;
+}
+export interface TradingStatusResponse {
+	status: string;
+	timestamp: number;
+}
+export interface TradeAggregateEntry {
+	time: number;
+	open: string;
+	high: string;
+	low: string;
+	close: string;
+	volume: string;
+}
+export interface TradeAggregateHistoryResponse {
+	expectedClosingTime: number;
+	resolution: number;
+	lastAggregateEndTime: number;
+	aggregates: TradeAggregateEntry[];
+	unit: string;
+	sourceCurrency: string;
+}
+export interface KpiFiscalPeriod {
+	type: string;
+	number: number;
+	year: number;
+}
+export interface KpiPeriodValue {
+	year: number;
+	quarter: number | null;
+	reportingDate: string;
+	yoyGrowth?: number;
+	margin?: number;
+}
+export interface KpiEstimateValue {
+	year: number;
+	quarter: number;
+	actual: number | null;
+	actualCurrency: string | null;
+	estimated: number | null;
+	estimatedCurrency: string | null;
+	forecast?: number;
+	forecastCurrency?: string;
+	fiscalPeriod: KpiFiscalPeriod;
+	reportingDate: string;
+}
+export interface StockDetailKpisSet {
+	revenues: (KpiPeriodValue & {
+		revenue: number;
+		revenueCurrency: string;
+	})[];
+	ebitdas: (KpiPeriodValue & {
+		ebitda: number;
+		ebitdaCurrency: string;
+	})[];
+	ebits: (KpiPeriodValue & {
+		ebit: number;
+		ebitCurrency: string;
+	})[];
+	netIncomes: (KpiPeriodValue & {
+		netIncome: number;
+		netIncomeCurrency: string;
+	})[];
+	grossProfits: (KpiPeriodValue & {
+		grossProfit: number;
+		grossProfitCurrency: string;
+	})[];
+	preTaxProfits: (KpiPeriodValue & {
+		preTaxProfit: number;
+		preTaxProfitCurrency: string;
+	})[];
+	afterTaxProfits: (KpiPeriodValue & {
+		afterTaxProfit: number;
+		afterTaxProfitCurrency: string;
+	})[];
+	returnOnEquity: (KpiPeriodValue & {
+		returnOnEquity: number;
+	})[];
+	returnOnAssets: (KpiPeriodValue & {
+		returnOnAssets: number;
+	})[];
+	eps: KpiEstimateValue[];
+	bookValuePerShare: KpiEstimateValue[];
+}
+export interface StockDetailKpisResponse extends StockDetailKpisSet {
+	quarterly: StockDetailKpisSet;
+}
+export interface NeonSearchAggregationBucket {
+	id: string;
+	name: string;
+	type: "sector" | "issuer" | "region" | "index" | "country" | "attribute" | string;
+	icon: string;
+	count: number;
+}
+export interface NeonSearchAggregationsResponse {
+	results: NeonSearchAggregationBucket[];
+	resultCount: number;
+	correlationId: string;
+}
+export interface YieldToMaturityResponse {
+	isin: string;
+	quotation: string;
+	yieldToMaturity: string;
+	timestamp: string;
+}
+export interface DerivativeResult {
+	isin: string;
+	optionType: "call" | "put" | "long" | "short" | string;
+	productCategoryName: string;
+	nextGenProductCategoryName: string;
+	barrier: number | null;
+	leverage: number | null;
+	strike: number | null;
+	size: number | null;
+	factor: number | null;
+	delta: number | null;
+	currency: string;
+	expiry: string | null;
+	issuerDisplayName: string;
+	issuer: string;
+	issuerImageId: string;
+	imageId: string;
+}
+export interface DerivativesResponse {
+	results: DerivativeResult[];
+	resultCount: number;
+	issuerCount: Record<string, number>;
+	cursors: {
+		before: string | null;
+		after: string | null;
+	};
+}
+export interface EtfMetrics {
+	peRatio: number | null;
+	pbRatio: number | null;
+	yield: number | null;
+	assetsUnderManagement: number | null;
+	assetsUnderManagementCurrency: string | null;
+	beta: number | null;
+	deviation: number | null;
+}
+export interface EtfCompositionEntry {
+	isin: string;
+	name: string;
+	marketValue: number;
+	holdingPercent: number;
+	tags: (Tag & {
+		icon?: string;
+		imageId?: string;
+	})[];
+}
+export interface EtfAggregatedDistribution {
+	periodStartDate: string;
+	projected: number | null;
+	yieldValue: number | null;
+	amount: number | null;
+	amountCurrency: string | null;
+	count: number | null;
+	projectedCount: number | null;
+	price: number | null;
+	priceCurrency: string | null;
+}
+export interface EtfDetails {
+	isin: string;
+	wkn: string;
+	name: string;
+	inceptionDate: string;
+	domicile: string;
+	replicationMethod: string;
+	rebalancingInterval: string;
+	totalExpenseRatio: number;
+	underlyingIndex: string;
+	distributionFrequency: string;
+	distributionPolicy: string;
+	type: string;
+	issuer: string;
+	composition: EtfCompositionEntry[];
+	totalCompositionCount: number;
+	focus: string[];
+	exposure: unknown;
+	metrics: EtfMetrics;
+	distributions: unknown[];
+	totalDistributionCount: number;
+	aggregatedDistributions: EtfAggregatedDistribution[];
 }
 export type MessageResponseMap = {
 	customerPermissions: {
@@ -741,9 +1055,7 @@ export type MessageResponseMap = {
 	priceForOrder: PriceForOrderResponse;
 	stockDetails: StockDetails;
 	performance: PerformanceResponse;
-	yieldToMaturity: {
-		yield: string;
-	};
+	yieldToMaturity: YieldToMaturityResponse;
 	neonNews: NeonNewsItem[];
 	instrumentSuitability: {
 		suitable: boolean;
@@ -751,17 +1063,13 @@ export type MessageResponseMap = {
 	simpleCreateOrder: {
 		id: string;
 	};
-	derivatives: {
-		results: unknown[];
-	};
+	derivatives: DerivativesResponse;
 	accountPairs: {
 		authAccountId: string;
 		accounts: AccountPair[];
 	};
-	neonSearchAggregations: {
-		aggregations: unknown[];
-	};
-	etfDetails: unknown;
+	neonSearchAggregations: NeonSearchAggregationsResponse;
+	etfDetails: EtfDetails;
 	removeFromWatchlist: unknown;
 	addToWatchlist: unknown;
 	etfComposition: unknown;
@@ -771,6 +1079,19 @@ export type MessageResponseMap = {
 	neonSearchTags: {
 		tags: Tag[];
 	};
+	compactPortfolioByTypeV2: CompactPortfolioByTypeV2Response;
+	cryptoPortfolioStatus: CryptoPortfolioStatusResponse;
+	fixedIncomePortfolioStatus: FixedIncomePortfolioStatusResponse;
+	privateMarketsPortfolioStatus: PrivateMarketsPortfolioStatusResponse;
+	privateMarketsPositions: PrivateMarketsPositionsResponse;
+	priceAlarms: unknown;
+	priceForOrderV2: PriceForOrderV2Response;
+	tape: TapeResponse;
+	tickerV2: TickerV2Response;
+	tradingStatus: TradingStatusResponse;
+	tradeAggregateHistory: TradeAggregateHistoryResponse;
+	bondValuationV2: BondValuation;
+	stockDetailKpis: StockDetailKpisResponse;
 };
 export declare function createMessage<T extends keyof MessageTypeMap>(type: T, data?: Omit<MessageTypeMap[T], "type">): MessageTypeMap[T];
 /**
@@ -796,8 +1117,8 @@ export declare const silentLogger: Logger;
  */
 export type TradeRepublicEvents = "open" | "close" | "reconnecting" | "reconnect_failed" | "error";
 export declare class TradeRepublicApi extends EventEmitter {
-	private readonly phoneNo;
-	private readonly pin;
+	private readonly phoneNo?;
+	private readonly pin?;
 	private readonly logger;
 	private static readonly HOST;
 	private static readonly WS_HOST;
@@ -826,12 +1147,12 @@ export declare class TradeRepublicApi extends EventEmitter {
 	private wafTokenInFlight?;
 	/**
 	 * Initializes a new instance of the TradeRepublicApi
-	 * @param phoneNo The phone number associated with the Trade Republic account
-	 * @param pin The PIN for the Trade Republic account
+	 * @param phoneNo The phone number associated with the Trade Republic account. Optional when only {@link loginWithQrCode} is used
+	 * @param pin The PIN for the Trade Republic account. Optional when only {@link loginWithQrCode} is used
 	 * @param cookieStoragePath Optional path to store session cookies. Defaults to user's home directory
 	 * @param logger Optional logger sink. Defaults to the global `console`; pass {@link silentLogger} to disable logging
 	 */
-	constructor(phoneNo: string, pin: string, cookieStoragePath?: string, logger?: Logger);
+	constructor(phoneNo?: string | undefined, pin?: string | undefined, cookieStoragePath?: string, logger?: Logger);
 	on(event: TradeRepublicEvents, listener: (...args: any[]) => void): this;
 	once(event: TradeRepublicEvents, listener: (...args: any[]) => void): this;
 	emit(event: TradeRepublicEvents, ...args: any[]): boolean;
@@ -841,7 +1162,26 @@ export declare class TradeRepublicApi extends EventEmitter {
 	 * the same in-flight promise.
 	 */
 	login(): Promise<boolean>;
+	/**
+	 * Logs into Trade Republic using the QR-code flow instead of phone number + PIN.
+	 *
+	 * @param onQrCode Invoked with the QR payload URL to display. May be called again if the QR token rotates before the user scans it.
+	 */
+	loginWithQrCode(onQrCode: (qrCodePayload: string) => void): Promise<boolean>;
 	private _doLogin;
+	private _doQrLogin;
+	/**
+	 * Creates a QR login challenge. The returned `challengeId` is polled until the
+	 * user scans the QR code with their app.
+	 */
+	private _createQrChallenge;
+	/**
+	 * Polls the QR challenge until the user approves the login in their app.
+	 *
+	 * @param challengeId The challengeId from {@link _createQrChallenge}
+	 * @param onQrCode Callback that receives the QR payload URL to display
+	 */
+	private _waitForQrConfirmation;
 	private _getWafToken;
 	private _fetchWafToken;
 	/**

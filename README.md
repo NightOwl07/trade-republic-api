@@ -10,7 +10,7 @@ This project was created using Bun v1.1.13. [Bun](https://bun.sh) is a fast all-
 
 ## Features
 
--   **Login**: Authenticate using phone number and PIN, including app confirmation.
+-   **Login**: Authenticate using phone number and PIN (with app confirmation), or via a scannable QR code.
 -   **AWS WAF Bypass**: Automatically fetches a WAF token via Puppeteer.
 -   **Session Persistence**: Sessions are saved locally (`~/.tr_api_cookies.json`) and refreshed via refresh token when needed.
 -   **WebSocket Connection**: Setup, echo keepalive, and automatic reconnect with exponential backoff.
@@ -42,8 +42,8 @@ yarn add NightOwl07/trade-republic-api
 
 ```typescript
 new TradeRepublicApi(
-    phoneNo,             // e.g. "+4912345678910"
-    pin,                 // Trade Republic PIN
+    phoneNo?,            // e.g. "+4912345678910" (required for login(), optional for loginWithQrCode())
+    pin?,               // Trade Republic PIN (required for login(), optional for loginWithQrCode())
     cookieStoragePath?,  // optional: custom path for the session file (default: ~/.tr_api_cookies.json)
     logger?              // optional: custom logger (default: console)
 )
@@ -99,11 +99,42 @@ api.subscribeOnce(searchMessage, (results) => {
 });
 ```
 
+### Example: QR-code login
+
+Instead of phone number + PIN, you can log in by scanning a QR code with your
+already-authenticated Trade Republic app. `loginWithQrCode` hands you the payload
+URL to render as a QR code; the promise resolves once you approve the sign-in in
+the app. Phone number and PIN are not required for this flow.
+
+```typescript
+import { TradeRepublicApi } from "trapi";
+import qrcode from "qrcode-terminal"; // any QR renderer works
+
+// Credentials are optional when only using QR login:
+const api = new TradeRepublicApi();
+
+await api.loginWithQrCode((qrCodePayload) => {
+    // Render the payload URL however you like (terminal, image, web page, ...)
+    qrcode.generate(qrCodePayload, { small: true });
+    console.log("Scan the QR code above with your Trade Republic app.");
+});
+
+// ...now subscribe as usual
+```
+
+> The QR code only encodes the `qrCodePayload` URL. The fancy styling in the
+> official web app (rounded dots, logo) is cosmetic and irrelevant to scanning,
+> so any plain QR renderer works. See [`examples/qr-login.ts`](examples/qr-login.ts)
+> for a complete, runnable terminal example.
+
 ### Login Notes
 
-- If a valid saved session exists, it is reused (no PIN/app confirmation required).
+- If a valid saved session exists, it is reused (no PIN/QR/app confirmation required).
 - If the session is invalid, the library attempts a refresh via the refresh token.
-- Only if both fail does the full login flow (including app confirmation) run.
+- Only if both fail does a full login run either the PIN + app confirmation flow
+  (`login()`) or the QR-code flow (`loginWithQrCode()`).
+- `login()` and `loginWithQrCode()` are mutually exclusive; concurrent calls share
+  the same in-flight attempt.
 
 ### Events
 

@@ -72,6 +72,8 @@ const HTTP_TIMEOUT_MS = 10_000;
 const WAF_PAGE_LOAD_TIMEOUT_MS = 15_000;
 const APP_CONFIRMATION_POLL_MS = 2_500;
 const APP_CONFIRMATION_TIMEOUT_MS = 120_000;
+const QR_CHALLENGE_POLL_MS = 2_000;
+const QR_CHALLENGE_TIMEOUT_MS = 120_000;
 
 const USER_AGENT =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
@@ -114,14 +116,14 @@ export class TradeRepublicApi extends EventEmitter {
 
     /**
      * Initializes a new instance of the TradeRepublicApi
-     * @param phoneNo The phone number associated with the Trade Republic account
-     * @param pin The PIN for the Trade Republic account
+     * @param phoneNo The phone number associated with the Trade Republic account. Optional when only {@link loginWithQrCode} is used
+     * @param pin The PIN for the Trade Republic account. Optional when only {@link loginWithQrCode} is used
      * @param cookieStoragePath Optional path to store session cookies. Defaults to user's home directory
      * @param logger Optional logger sink. Defaults to the global `console`; pass {@link silentLogger} to disable logging
      */
     constructor(
-        private readonly phoneNo: string,
-        private readonly pin: string,
+        private readonly phoneNo?: string,
+        private readonly pin?: string,
         cookieStoragePath?: string,
         private readonly logger: Logger = console
     ) {
@@ -152,6 +154,23 @@ export class TradeRepublicApi extends EventEmitter {
         }
 
         this.loginInFlight = this._doLogin().finally(() => {
+            this.loginInFlight = undefined;
+        });
+
+        return this.loginInFlight;
+    }
+
+    /**
+     * Logs into Trade Republic using the QR-code flow instead of phone number + PIN.
+     * 
+     * @param onQrCode Invoked with the QR payload URL to display. May be called again if the QR token rotates before the user scans it.
+     */
+    async loginWithQrCode(onQrCode: (qrCodePayload: string) => void): Promise<boolean> {
+        if (this.loginInFlight) {
+            return this.loginInFlight;
+        }
+
+        this.loginInFlight = this._doQrLogin(onQrCode).finally(() => {
             this.loginInFlight = undefined;
         });
 
@@ -189,6 +208,131 @@ export class TradeRepublicApi extends EventEmitter {
             await this._clearSessionAndConnection(false);
             return false;
         }
+    }
+
+    private async _doQrLogin(onQrCode: (qrCodePayload: string) => void): Promise<boolean> {
+        this.logger.info("Attempting to log in via QR code...");
+        this.shouldReconnect = true;
+        try {
+            await this._getWafToken();
+
+            if (await this._loadValidateOrRefreshSavedSession()) {
+                this.logger.info("Logged in using a saved/refreshed session. WebSocket ready.");
+                return true;
+            }
+
+            this.logger.info("No usable saved session. Starting QR-code login...");
+            const challenge = await this._createQrChallenge();
+
+            const confirmResponse = await this._waitForQrConfirmation(challenge.challengeId, onQrCode);
+            this._consumeSessionCookies(confirmResponse);
+
+            await this._saveSessionToFile();
+            await this._setupWebSocket();
+            this.logger.info("Login successful via QR-code flow. WebSocket ready.");
+            return true;
+        } catch (error) {
+            this.logger.error("QR-code login failed:", error instanceof Error ? error.message : error);
+            await this._clearSessionAndConnection(false);
+            return false;
+        }
+    }
+
+    /**
+     * Creates a QR login challenge. The returned `challengeId` is polled until the
+     * user scans the QR code with their app.
+     */
+    private async _createQrChallenge(): Promise<{ challengeId: string; challengeExpiresAt: string }> {
+        const response = await this._request("/api/v2/auth/web/login/qr-challenges", null, "POST");
+
+        if (!response.ok) {
+            const errorBody = await response.text();
+            throw new Error(`QR challenge request failed with status ${response.status}: ${errorBody}`);
+        }
+
+        const data = (await response.json()) as { challengeId?: string; challengeExpiresAt?: string };
+        if (!data.challengeId) {
+            throw new Error("QR challenge failed: no challengeId received.");
+        }
+
+        return data as { challengeId: string; challengeExpiresAt: string };
+    }
+
+    /**
+     * Polls the QR challenge until the user approves the login in their app.
+     * 
+     * @param challengeId The challengeId from {@link _createQrChallenge}
+     * @param onQrCode Callback that receives the QR payload URL to display
+     */
+    private _waitForQrConfirmation(
+        challengeId: string,
+        onQrCode: (qrCodePayload: string) => void
+    ): Promise<Response> {
+        const deadline = Date.now() + QR_CHALLENGE_TIMEOUT_MS;
+        let lastPayload: string | undefined;
+
+        return new Promise<Response>((resolve, reject) => {
+            const poll = async (): Promise<void> => {
+                try {
+                    if (Date.now() > deadline) {
+                        return reject(new Error(
+                            `QR-code login timed out after ${QR_CHALLENGE_TIMEOUT_MS / 1000}s. ` +
+                            `Please scan the QR code with your Trade Republic app.`
+                        ));
+                    }
+
+                    const checkResponse = await this._request(
+                        `/api/v2/auth/web/login/qr-challenges/${challengeId}`,
+                        null,
+                        "GET"
+                    );
+                    if (!checkResponse.ok) {
+                        const errorBody = await checkResponse.text();
+                        return reject(new Error(
+                            `Error while checking QR challenge status (${checkResponse.status}): ${errorBody}`
+                        ));
+                    }
+
+                    const checkData = (await checkResponse.clone().json()) as {
+                        status?: string;
+                        qrCodePayload?: string | null;
+                        processId?: string | null;
+                    };
+
+                    if (checkData.qrCodePayload && checkData.qrCodePayload !== lastPayload) {
+                        lastPayload = checkData.qrCodePayload;
+                        try {
+                            onQrCode(checkData.qrCodePayload);
+                        } catch (cbErr) {
+                            this.logger.warn(
+                                "QR code callback threw:",
+                                cbErr instanceof Error ? cbErr.message : cbErr
+                            );
+                        }
+                    }
+
+                    if (checkData.processId) {
+                        this.processId = checkData.processId;
+                        return resolve(await this._waitForAppConfirmation(checkData.processId));
+                    }
+
+                    if (checkData.status && checkData.status !== "PENDING") {
+                        if (checkData.status === "COMPLETED" || checkData.status === "CONFIRMED") {
+                            return resolve(checkResponse);
+                        }
+                        return reject(new Error(
+                            `QR-code login failed with status "${checkData.status}". Please try again.`
+                        ));
+                    }
+
+                    setTimeout(poll, QR_CHALLENGE_POLL_MS);
+                } catch (err) {
+                    reject(err instanceof Error ? err : new Error(String(err)));
+                }
+            };
+
+            poll();
+        });
     }
 
     private async _getWafToken(forceRefresh = false): Promise<string> {
@@ -257,6 +401,13 @@ export class TradeRepublicApi extends EventEmitter {
      * Performs the initial step of the login process to get a processId.
      */
     private async _performInitialLoginStep(): Promise<{ processId?: string;[key: string]: any }> {
+        if (!this.phoneNo || !this.pin) {
+            throw new Error(
+                "Phone number and PIN are required for this login flow. " +
+                "Provide them in the constructor, or use loginWithQrCode() instead."
+            );
+        }
+
         const response = await this._request("/api/v2/auth/web/login", {
             phoneNumber: this.phoneNo,
             pin: this.pin
